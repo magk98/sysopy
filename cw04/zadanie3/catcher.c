@@ -15,17 +15,13 @@ int received_signal_number_sender = 0;
 
 
 void sender(pid_t catcher, int domain_signal_number, char* tryb){
-    printf("A");
     sigset_t user_signals;
     sigemptyset(&user_signals);
     sigaddset(&user_signals, SIGUSR1);
     sigaddset(&user_signals, SIGUSR2);
-    printf("B");
     for(int i = 0; i < domain_signal_number; i++) {
-        printf("C");
         kill(catcher, SIGUSR1);
     }
-    printf("D");
     kill(catcher, SIGUSR2);
     printf("Sender send %d signals SIGUSR1 and one SIGUSR2.\n", domain_signal_number);
     int status = 0;
@@ -47,12 +43,11 @@ void senderHandler(int signum, siginfo_t *info, void *context) {
 }
 
 void childHandler(int sig_no, siginfo_t *info, void *context){
-    printf("eee\n");
     if (info->si_pid != getppid())
         return;
     if(sig_no == SIGUSR1) {
         received_signal_number_catcher++;
-        printf("macarena\n");
+
     }
     if(sig_no == SIGUSR2){
         for(int i = 0; i < received_signal_number_catcher; i++){
@@ -64,7 +59,6 @@ void childHandler(int sig_no, siginfo_t *info, void *context){
 }
 
 void childProcess() {
-    printf("dziecko1\n");
     struct sigaction act;
     sigemptyset(&act.sa_mask);
     act.sa_flags = SA_SIGINFO;
@@ -107,11 +101,9 @@ int main(int argc, char** argv){
         exit(1);
     }
     if(child == 0){
-        printf("sialala == 0\n");
         sender(getpid(), domain_signal_number, tryb);
     }
     if(child > 0){
-        printf("sialala > 0\n");
         childProcess();
     }
 
