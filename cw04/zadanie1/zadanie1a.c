@@ -28,7 +28,6 @@ int main(int argc, char** argv){
     while(1){
         sigaction(SIGTSTP, &act, NULL);
         signal(SIGINT, init_signal);
-
         if(is_awaiting == 0) {
             t = time(NULL);
             strftime(s, sizeof(s), "%c", localtime(&t));
