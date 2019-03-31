@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
 #include <signal.h>
+#include <unistd.h>
 
 int is_awaiting = 0;
 int is_dead_process = 0;
