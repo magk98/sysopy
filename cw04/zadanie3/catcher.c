@@ -9,73 +9,40 @@
 #include <stdlib.h>
 #include <memory.h>
 
-volatile pid_t child;
-int received_signal_number_catcher = 0;
-int received_signal_number_sender = 0;
+int received_signal_number = 0;
+int send_signal_number = 0;
 
-
-void sender(pid_t catcher, int domain_signal_number, char* tryb){
-    sigset_t user_signals;
-    sigemptyset(&user_signals);
-    sigaddset(&user_signals, SIGUSR1);
-    sigaddset(&user_signals, SIGUSR2);
-    for(int i = 0; i < domain_signal_number; i++) {
-        kill(catcher, SIGUSR1);
-    }
-    kill(catcher, SIGUSR2);
-    printf("Sender send %d signals SIGUSR1 and one SIGUSR2.\n", domain_signal_number);
-    int status = 0;
-    waitpid(catcher, &status, 0);
-    if (WIFEXITED(status))
-        received_signal_number_catcher = WEXITSTATUS(status);
-    else {
-        printf("Error with termination of Child!\n");
-        exit(1);
-    }
+void signal_sigusr1(int no, siginfo_t *info, void *ucontext){
+    received_signal_number++;
 }
 
-void senderHandler(int signum, siginfo_t *info, void *context) {
-    if (info->si_pid != child) return;
-    if (signum == SIGUSR1) {
-        received_signal_number_sender++;
-        printf("Sender: Received SIGUSR1 from Catcher.\n");
-    }
-}
-
-void childHandler(int sig_no, siginfo_t *info, void *context){
-    if (info->si_pid != getppid())
-        return;
-    if(sig_no == SIGUSR1) {
-        received_signal_number_catcher++;
-
-    }
-    if(sig_no == SIGUSR2){
-        for(int i = 0; i < received_signal_number_catcher; i++){
-            kill(getppid(), SIGUSR1);
+void signal_sigusr2(int sig_no, siginfo_t *info, void *context) {
+    child = info->si_pid;
+    union sigval value;
+    for(int i = 0; i < received_signal_number; i++){
+        if(mode == 0){
+            if(kill(child,SIGUSR1) != 0)
+                printf("Error while sending SIGUSR1\n");
+        }else if(mode == 1){
+            if(sigqueue(child, SIGUSR1, value) != 0)
+                printf("Error while sending SIGUSR1\n");
+        }else if(mode == 2){
+            if(kill(child,SIGRTMIN + 12) != 0){}
         }
-        printf("Catcher received %d signals. Sending signals back.\n", received_signal_number_catcher);
-        exit((unsigned) received_signal_number_catcher);
     }
-}
-
-void childProcess() {
-    struct sigaction act;
-    sigemptyset(&act.sa_mask);
-    act.sa_flags = SA_SIGINFO;
-    act.sa_sigaction = childHandler;
-
-    if (sigaction(SIGUSR1, &act, NULL) == -1){
-        printf("Can't catch SIGUSR1.\n");
-        exit(1);
-    }
-    if (sigaction(SIGUSR2, &act, NULL) == -1){
-        printf("Can't catch SIGUSR2.\n");
-        exit(1);
+    if(mode == 0){
+        if (kill(child,SIGUSR2) != 0)
+            printf("Error while sending SIGUSR2\n");
+    }else if(mode == 1){
+        value.sival_int=received_signal_number;
+        if(sigqueue(child,SIGUSR2,value) != 0)
+            printf("Error while sending SIGUSR2\n");
+    }else if(mode == 2){
+        if(kill(child,SIGRTMIN + 13) != 0)
+            printf("Error while sending SIGUSR2\n");
     }
 
-    while (1) {
-        sleep(1);
-    }
+    received_signal_number = 0;
 }
 
 int main(int argc, char** argv){
@@ -93,21 +60,31 @@ int main(int argc, char** argv){
         printf("Wrong mode, nothing happened.\n");
         exit(1);
     }
+    else if(strcmp(tryb, "KILL") == 0) mode = 0;
+    else if(strcmp(tryb, "SIGQUEUE") == 0) mode = 1;
+    else if(strcmp(tryb, "SIGRT") == 0) mode = 2;
     printf("Catcher PID: %d\n", getpid());
-    child = fork();
-    printf("Sender PID: %d\n", child);
-    if(child < 0){
-        printf("Error while forking, nothing happened.\n");
-        exit(1);
-    }
-    if(child == 0){
-        sender(getpid(), domain_signal_number, tryb);
-    }
-    if(child > 0){
-        childProcess();
-    }
+    struct sigaction act;
 
+    act.sa_flags = SA_SIGINFO;
 
+    act.sa_sigaction = signal_sigusr1;
+    sigfillset(&act.sa_mask);
+    sigdelset(&act.sa_mask, SIGUSR1);
+    sigdelset(&act.sa_mask, SIGRTMIN + 12);
+    sigaction(SIGUSR1, &act, NULL);
+    sigaction(SIGRTMIN + 12, &act, NULL);
 
+    act.sa_sigaction = signal_sigusr2;
+    sigfillset(&act.sa_mask);
+    sigdelset(&act.sa_mask, SIGUSR2);
+    sigdelset(&act.sa_mask, SIGRTMIN + 13);
+    sigaction(SIGUSR2, &act, NULL);
+    sigaction(SIGRTMIN + 13, &act, NULL);
+
+    while(1){
+        sleep(1);
+    }
+    
     return 0;
 }
